@@ -56,7 +56,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (ready && authenticated) {
-      router.push("/dashboard");
+      router.push("/tokens");
     }
   }, [ready, authenticated, router]);
 

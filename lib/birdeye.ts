@@ -25,6 +25,15 @@ export interface TrendingToken {
   rank: number;
 }
 
+export interface NewListing {
+  address: string;
+  symbol: string;
+  name: string;
+  logoURI: string;
+  liquidity: number;
+  liquidityAddedAt: string;
+}
+
 export interface TokenOverview {
   address: string;
   symbol: string;
@@ -57,6 +66,18 @@ export interface Trade {
   owner: string;
 }
 
+export interface TopTrader {
+  owner: string;
+  tags: string[];
+  trades: number;
+  tradesBuy: number;
+  tradesSell: number;
+  volumeUsd: number;
+  totalPnl: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+}
+
 // BirdEye's raw response keys don't match across endpoints (eg. token_trending
 // uses "price24hChangePercent" while token_overview uses "priceChange24hPercent",
 // and txs/token nests amounts under "base"/"quote" instead of returning them flat) —
@@ -79,6 +100,23 @@ export async function getTrendingTokens(limit = 20): Promise<TrendingToken[]> {
     volume24hUSD: t.volume24hUSD,
     marketcap: t.marketcap,
     rank: t.rank,
+  }));
+}
+
+export async function getNewListings(limit = 20): Promise<NewListing[]> {
+  const res = await fetch(`${BASE}/defi/v2/tokens/new_listing?limit=${limit}`, {
+    headers: birdHeaders,
+    next: { revalidate: 30 },
+  });
+  const json = await res.json();
+  const items = json?.data?.items ?? [];
+  return items.map((item: any) => ({
+    address: item.address,
+    symbol: item.symbol,
+    name: item.name,
+    logoURI: item.logoURI,
+    liquidity: item.liquidity,
+    liquidityAddedAt: item.liquidityAddedAt,
   }));
 }
 
@@ -150,6 +188,35 @@ export async function getTokenPrice(address: string): Promise<number | null> {
   const res = await fetch(`${BASE}/defi/price?address=${address}`, { headers: birdHeaders });
   const json = await res.json();
   return json?.data?.value ?? null;
+}
+
+// Real per-token trader leaderboard. Confirmed live: time_frame supports
+// 30m..90d, sort_by supports volume/trade/total_pnl/realized_pnl/unrealized_pnl/volume_usd.
+// limit is capped at 10 per BirdEye's docs — paginate via offset for a longer list.
+export async function getTopTraders(
+  address: string,
+  timeFrame = "24h",
+  sortBy: "volume" | "trade" | "total_pnl" | "realized_pnl" | "unrealized_pnl" | "volume_usd" = "volume_usd",
+  limit = 10,
+  offset = 0
+): Promise<TopTrader[]> {
+  const res = await fetch(
+    `${BASE}/defi/v2/tokens/top_traders?address=${address}&time_frame=${timeFrame}&sort_by=${sortBy}&sort_type=desc&limit=${limit}&offset=${offset}`,
+    { headers: birdHeaders }
+  );
+  const json = await res.json();
+  const items = json?.data?.items ?? [];
+  return items.map((item: any) => ({
+    owner: item.owner,
+    tags: item.tags ?? [],
+    trades: item.trade,
+    tradesBuy: item.tradeBuy,
+    tradesSell: item.tradeSell,
+    volumeUsd: item.volumeUsd,
+    totalPnl: item.totalPnl,
+    realizedPnl: item.realizedPnl,
+    unrealizedPnl: item.unrealizedPnl,
+  }));
 }
 
 // The batch /defi/multi_price endpoint isn't available on the free API tier

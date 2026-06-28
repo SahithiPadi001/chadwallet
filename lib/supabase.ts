@@ -59,43 +59,29 @@ export async function getOrCreateUser(
 ): Promise<DbUser> {
   const db = createServerSupabase();
 
+  // Concurrent first-time requests (e.g. nav + portfolio fetch both firing on
+  // first login) can race a select-then-insert — upsert on the unique key
+  // instead so Postgres resolves the conflict atomically.
   const { data: existing } = await db
     .from("users")
     .select("*")
     .eq("privy_user_id", privyUserId)
     .maybeSingle();
 
-  if (existing) {
-    const needsUpdate =
-      (fields.walletAddress && fields.walletAddress !== existing.wallet_address) ||
-      (fields.username && fields.username !== existing.username);
-
-    if (!needsUpdate) return existing as DbUser;
-
-    const { data: updated, error } = await db
-      .from("users")
-      .update({
-        wallet_address: fields.walletAddress ?? existing.wallet_address,
-        username: fields.username ?? existing.username,
-      })
-      .eq("id", existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return updated as DbUser;
-  }
-
-  const { data: created, error } = await db
+  const { data: upserted, error } = await db
     .from("users")
-    .insert({
-      privy_user_id: privyUserId,
-      wallet_address: fields.walletAddress ?? null,
-      username: fields.username ?? null,
-    })
+    .upsert(
+      {
+        privy_user_id: privyUserId,
+        wallet_address: fields.walletAddress ?? existing?.wallet_address ?? null,
+        username: fields.username ?? existing?.username ?? null,
+      },
+      { onConflict: "privy_user_id" }
+    )
     .select()
     .single();
   if (error) throw error;
-  return created as DbUser;
+  return upserted as DbUser;
 }
 
 export async function getUserByPrivyId(privyUserId: string): Promise<DbUser | null> {

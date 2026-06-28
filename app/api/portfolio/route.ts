@@ -1,11 +1,11 @@
 // GET /api/portfolio?address=<wallet>&privyUserId=<id>&username=
-// Computes real net worth from on-chain balances (Alchemy) + live prices (BirdEye),
-// records a snapshot for history, and returns the sparkline data.
-// Used by: NetWorthCard
+// Computes real net worth + per-token holdings from on-chain balances (Alchemy)
+// + live prices/symbols (BirdEye), records a snapshot for history.
+// Used by: app/portfolio/page.tsx
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSolBalance, getTokenAccounts, WRAPPED_SOL_MINT } from "@/lib/alchemy";
-import { getMultipleTokenPrices } from "@/lib/birdeye";
+import { getTokenOverview } from "@/lib/birdeye";
 import { getOrCreateUser, createServerSupabase } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
@@ -26,11 +26,27 @@ export async function GET(req: NextRequest) {
     ]);
 
     const mints = [WRAPPED_SOL_MINT, ...tokenAccounts.map((t) => t.mint)];
-    const prices = await getMultipleTokenPrices(mints);
+    const overviews = await Promise.all(mints.map((m) => getTokenOverview(m).catch(() => null)));
+    const overviewByMint = new Map(mints.map((m, i) => [m, overviews[i]]));
 
-    const solValue = solBalance * (prices[WRAPPED_SOL_MINT] ?? 0);
-    const tokensValue = tokenAccounts.reduce((sum, t) => sum + t.amount * (prices[t.mint] ?? 0), 0);
-    const netWorth = solValue + tokensValue;
+    const solOverview = overviewByMint.get(WRAPPED_SOL_MINT);
+    const solValue = solBalance * (solOverview?.price ?? 0);
+
+    const tokenHoldings = tokenAccounts.map((t) => {
+      const ov = overviewByMint.get(t.mint);
+      const usdValue = t.amount * (ov?.price ?? 0);
+      return { mint: t.mint, symbol: ov?.symbol ?? t.mint.slice(0, 4), logoURI: ov?.logoURI ?? "", amount: t.amount, usdValue };
+    });
+
+    const netWorth = solValue + tokenHoldings.reduce((sum, t) => sum + t.usdValue, 0);
+
+    const holdings = [
+      { mint: WRAPPED_SOL_MINT, symbol: "SOL", logoURI: solOverview?.logoURI ?? "", amount: solBalance, usdValue: solValue },
+      ...tokenHoldings,
+    ]
+      .filter((h) => h.usdValue > 0 || h.mint === WRAPPED_SOL_MINT)
+      .map((h) => ({ ...h, pct: netWorth > 0 ? (h.usdValue / netWorth) * 100 : 0 }))
+      .sort((a, b) => b.usdValue - a.usdValue);
 
     const db = createServerSupabase();
     await db.from("net_worth_snapshots").insert({ user_id: user.id, value_usd: netWorth });
@@ -45,17 +61,13 @@ export async function GET(req: NextRequest) {
     const history = (snapshots ?? []).map((s) => ({
       t: new Date(s.recorded_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       v: Number(s.value_usd),
+      ts: new Date(s.recorded_at).getTime(),
     }));
 
     const first = history[0]?.v ?? netWorth;
     const change = first > 0 ? ((netWorth - first) / first) * 100 : 0;
 
-    return NextResponse.json({
-      netWorth,
-      change,
-      history,
-      breakdown: { sol: { balance: solBalance, valueUsd: solValue }, tokens: tokenAccounts.length },
-    });
+    return NextResponse.json({ netWorth, change, history, holdings });
   } catch (err) {
     console.error("Portfolio API error:", err);
     return NextResponse.json({ error: "Failed to compute portfolio" }, { status: 500 });
