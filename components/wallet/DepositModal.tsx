@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "react-qr-code";
-import { ArrowLeft, Check, Copy, CreditCard, Loader2, QrCode, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Loader2, QrCode, X } from "lucide-react";
 import { shortenAddress } from "@/lib/utils";
 
 interface Props {
@@ -74,14 +74,6 @@ export function DepositModal({ walletAddress, onClose }: Props) {
                 <Loader2 className="w-5 h-5 text-muted flex-shrink-0 animate-spin" />
               )}
             </button>
-
-            <div className="w-full flex items-center justify-between bg-bg-card border border-bg-border rounded-2xl p-4 opacity-50">
-              <div>
-                <p className="text-white font-medium text-sm">Credit or debit</p>
-                <p className="text-muted text-xs mt-0.5">Coming soon!</p>
-              </div>
-              <CreditCard className="w-5 h-5 text-muted flex-shrink-0" />
-            </div>
           </div>
         ) : (
           <div className="p-5 pt-2 flex flex-col items-center">

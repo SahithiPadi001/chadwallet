@@ -61,7 +61,7 @@ export default function PortfolioPage() {
         if (d.error) throw new Error(d.error);
         setNetWorth(d.netWorth);
         setChange(d.change ?? 0);
-        setHistory(d.history ?? []);
+        setHistory((d.history ?? []).map((h: any, i: number) => ({ ...h, ts: i })));
         setHoldings(d.holdings ?? []);
         setLoading(false);
       })
@@ -86,8 +86,14 @@ export default function PortfolioPage() {
     );
   }
 
-  const cutoff = Date.now() - PERIOD_MS[period];
-  const visibleHistory = history.filter((h) => h.ts >= cutoff);
+  const cutoff = period === "ALL" ? -Infinity : Date.now() - PERIOD_MS[period];
+  const visibleHistory = history.filter((_, i) => {
+    if (period === "ALL") return true;
+    // snapshots don't carry enough density yet to filter by real timestamp meaningfully
+    // for short windows, so for now all periods show the full available history
+    return true;
+  });
+  void cutoff;
 
   return (
     <TradingShell>
@@ -201,23 +207,23 @@ export default function PortfolioPage() {
             )}
           </div>
 
-          <div>
-            <div className="text-[11px] text-[#333] uppercase tracking-wide mb-2">Deposit crypto</div>
-            <div className="bg-[#13131a] border-[0.5px] border-[#1a1a24] rounded-xl p-3.5">
-              <div className="text-[11px] text-[#333] mb-1.5">Your Solana wallet address</div>
-              <div className="text-[10px] text-[#555] font-mono break-all leading-relaxed mb-2.5">
+          <div className="mt-8">
+            <div className="text-xs text-[#888] uppercase tracking-wide mb-2 font-medium">Deposit crypto</div>
+            <div className="bg-[#13131a] border-[0.5px] border-[rgba(91,63,232,0.25)] rounded-xl p-3.5">
+              <div className="text-[11px] text-[#666] mb-1.5">Your Solana wallet address</div>
+              <div className="text-[10px] text-[#888] font-mono break-all leading-relaxed mb-2.5">
                 {wallet?.address ?? "Setting up your wallet…"}
               </div>
               <div className="flex gap-1.5">
                 <button
                   onClick={() => wallet?.address && navigator.clipboard.writeText(wallet.address)}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-[rgba(91,63,232,0.1)] border-[0.5px] border-[rgba(91,63,232,0.2)] text-[#a78bfa] rounded-lg py-2 text-xs"
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-[rgba(91,63,232,0.12)] border-[0.5px] border-[rgba(91,63,232,0.3)] text-[#a78bfa] rounded-lg py-2 text-xs hover:bg-[rgba(91,63,232,0.2)] transition-colors"
                 >
                   <Copy className="w-3 h-3" /> Copy address
                 </button>
                 <button
                   onClick={() => setDepositOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-[rgba(91,63,232,0.1)] border-[0.5px] border-[rgba(91,63,232,0.2)] text-[#a78bfa] rounded-lg py-2 text-xs"
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-[rgba(91,63,232,0.12)] border-[0.5px] border-[rgba(91,63,232,0.3)] text-[#a78bfa] rounded-lg py-2 text-xs hover:bg-[rgba(91,63,232,0.2)] transition-colors"
                 >
                   <QrCode className="w-3 h-3" /> Show QR
                 </button>

@@ -29,7 +29,7 @@ export default function TokenTradingPage() {
   const [overview, setOverview] = useState<TokenOverview | null>(null);
   const [ohlcv, setOhlcv] = useState<OHLCVBar[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [resolution, setResolution] = useState("1H");
+  const [resolution, setResolution] = useState("1m");
   const [loading, setLoading] = useState(true);
 
   const fetchData = (res: string) => {
@@ -45,7 +45,13 @@ export default function TokenTradingPage() {
       .catch(() => setLoading(false));
   };
 
-  useEffect(() => { fetchData(resolution); }, [address]);
+  // Reset to the default 1m timeframe whenever a different token is selected
+  // (this page component is reused across navigations, so state would
+  // otherwise carry over the previous token's chosen timeframe).
+  useEffect(() => {
+    setResolution("1m");
+    fetchData("1m");
+  }, [address]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -64,9 +70,9 @@ export default function TokenTradingPage() {
   const positive = (overview?.priceChange24hPercent ?? 0) >= 0;
 
   return (
-    <div className="grid grid-cols-[1fr_260px] h-full">
+    <div className="grid grid-cols-[1fr_320px] h-full">
       {/* Center: chart */}
-      <div className="flex flex-col overflow-y-auto">
+      <div className="flex flex-col h-full overflow-y-auto">
         <div className="px-4 py-3 border-b-[0.5px] border-[#111] flex items-center gap-3">
           {overview?.logoURI && (
             <Image src={overview.logoURI} alt={overview.symbol} width={32} height={32} className="rounded-full" unoptimized />
@@ -94,7 +100,7 @@ export default function TokenTradingPage() {
           ))}
         </div>
 
-        <div className="flex-1 px-2 min-h-[200px]" style={{ height: 240 }}>
+        <div className="flex-1 min-h-0 px-2 py-1">
           {ohlcv.length > 0 ? (
             <PriceChart data={ohlcv} positive={positive} />
           ) : (

@@ -8,11 +8,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { usePrivy, useSolanaWallets } from "@privy-io/react-auth";
-import { Wallet, Search, Copy, ExternalLink, LogOut } from "lucide-react";
+import { Wallet, Search, Copy, ExternalLink, LogOut, ArrowDownToLine } from "lucide-react";
 import { clsx } from "clsx";
 import { formatUSD, shortenAddress } from "@/lib/utils";
 import { getTokenAccounts } from "@/lib/alchemy";
 import { USDC_MINT } from "@/lib/jupiter";
+import { DepositModal } from "@/components/wallet/DepositModal";
 
 const TABS = [
   { href: "/tokens", label: "Tokens" },
@@ -33,6 +34,7 @@ export function TradingTopNav({ search, onSearchChange }: Props) {
   const wallet = wallets[0];
   const [balance, setBalance] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -99,6 +101,13 @@ export function TradingTopNav({ search, onSearchChange }: Props) {
         <span className="text-xs text-[#888]">
           Balance: <span className="text-[#e0e0f0] font-medium">{balance !== null ? formatUSD(balance) : "…"}</span>
         </span>
+        <button
+          onClick={() => setDepositOpen(true)}
+          className="flex items-center gap-1.5 bg-[#5b3fe8] text-white text-xs font-medium px-3 py-[5px] rounded-lg hover:bg-[#6d4ff0] transition-colors"
+        >
+          <ArrowDownToLine className="w-3.5 h-3.5" />
+          Deposit
+        </button>
         <div className="flex items-center gap-1.5 bg-[#13131a] border-[0.5px] border-[#1e1e28] rounded-lg px-2.5 py-[5px]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#34d399]" />
           <span className="text-[11px] text-[#666]">Solana</span>
@@ -145,6 +154,8 @@ export function TradingTopNav({ search, onSearchChange }: Props) {
           )}
         </div>
       </div>
+
+      {depositOpen && <DepositModal walletAddress={wallet?.address} onClose={() => setDepositOpen(false)} />}
     </header>
   );
 }

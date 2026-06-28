@@ -4,7 +4,7 @@ export async function POST(req: NextRequest) {
   const { tokenData } = await req.json();
   if (!tokenData) return NextResponse.json({ error: "tokenData required" }, { status: 400 });
 
-  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.replace(/\/$/, "");
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
   const apiKey = process.env.AZURE_OPENAI_API_KEY;
 
@@ -27,12 +27,15 @@ Keep it factual, short, and useful for a trader.`;
       },
       body: JSON.stringify({
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 200,
-        temperature: 0.7,
+        max_completion_tokens: 200,
       }),
     });
 
     const data = await res.json();
+    if (!res.ok) {
+      console.error("Azure OpenAI error:", data?.error ?? data);
+      return NextResponse.json({ error: data?.error?.message ?? "AI summary failed" }, { status: 500 });
+    }
     const summary = data.choices?.[0]?.message?.content ?? "";
     return NextResponse.json({ summary });
   } catch (err) {

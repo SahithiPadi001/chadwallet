@@ -33,7 +33,7 @@ export function PriceChart({ data, positive }: Props) {
       rightPriceScale: { borderColor: "#1e1e28" },
       timeScale: { borderColor: "#1e1e28" },
       width: containerRef.current.clientWidth,
-      height: 200,
+      height: containerRef.current.clientHeight,
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -59,13 +59,16 @@ export function PriceChart({ data, positive }: Props) {
 
     const handleResize = () => {
       if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
+        chart.applyOptions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
       }
     };
     window.addEventListener("resize", handleResize);
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(containerRef.current);
 
     return () => {
       window.removeEventListener("resize", handleResize);
+      observer.disconnect();
       chart.remove();
     };
   }, [data, positive]);
