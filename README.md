@@ -1,6 +1,6 @@
 # ChadWallet 🟣
 
-A Solana trading app — fomo.family style. Built with Next.js, Privy, BirdEye, and Alchemy.
+A Solana trading terminal — sign in with Google/Apple (Privy embedded wallet), browse real trending tokens, trade via Jupiter, track your portfolio, and check per-token trader leaderboards. Built with Next.js, Privy, BirdEye, Alchemy, Jupiter, and Supabase.
 
 ---
 
@@ -18,8 +18,8 @@ Open `.env.local` and fill in each value:
 
 | Key | Where to get it |
 |-----|----------------|
-| `NEXT_PUBLIC_PRIVY_APP_ID` | [console.privy.io](https://console.privy.io) → New App → copy App ID |
-| `NEXT_PUBLIC_SUPABASE_URL` | [supabase.com](https://supabase.com) → Project → Settings → API → Project URL |
+| `NEXT_PUBLIC_PRIVY_APP_ID` | [console.privy.io](https://console.privy.io) → New App → copy App ID, then enable Google/Apple under Login Methods |
+| `NEXT_PUBLIC_SUPABASE_URL` | [supabase.com](https://supabase.com) → Project → Settings → API → Project URL (no trailing path) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page → anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Same page → service_role key |
 | `BIRDEYE_API_KEY` | [birdeye.so](https://birdeye.so/data-api) → Sign up → API Keys |
@@ -57,6 +57,10 @@ CREATE TABLE net_worth_snapshots (
   value_usd NUMERIC NOT NULL,
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trades ENABLE ROW LEVEL SECURITY;
+ALTER TABLE net_worth_snapshots ENABLE ROW LEVEL SECURITY;
 ```
 
 ### 4. Run locally
@@ -79,71 +83,65 @@ vercel
 ```
 chadwallet/
 ├── app/
-│   ├── page.tsx               ← Landing / login page (Privy)
-│   ├── layout.tsx             ← Root layout + Privy provider
-│   ├── globals.css            ← Global styles + Tailwind
-│   ├── dashboard/page.tsx     ← Net worth + activity feed
-│   ├── trending/page.tsx      ← Trending tokens list
-│   ├── token/[address]/       ← Token detail + chart + buy/sell
+│   ├── page.tsx                  ← Landing / login page (Privy)
+│   ├── layout.tsx                ← Root layout + Privy provider
+│   ├── globals.css               ← Global styles + Tailwind
+│   ├── tokens/
+│   │   ├── layout.tsx            ← Top nav + persistent token list column
+│   │   ├── page.tsx              ← Redirects to the top trending token
+│   │   └── [address]/page.tsx    ← Chart + stats + live trades + trade panel
+│   ├── portfolio/page.tsx        ← Net worth, holdings, activity, deposit
+│   ├── leaderboard/page.tsx      ← Per-token top traders (real BirdEye data)
 │   └── api/
-│       ├── trending/route.ts  ← GET /api/trending → BirdEye
-│       ├── token/route.ts     ← GET /api/token?address=
-│       └── ai/route.ts        ← POST /api/ai → Claude summary
+│       ├── trending/route.ts     ← GET /api/trending → BirdEye trending/new listings
+│       ├── token/route.ts        ← GET /api/token?address= → overview/OHLCV/trades
+│       ├── portfolio/route.ts    ← GET /api/portfolio → real net worth + holdings
+│       ├── trades/route.ts       ← GET/POST trade history (Supabase)
+│       ├── leaderboard/route.ts  ← GET /api/leaderboard → BirdEye top traders
+│       └── ai/route.ts           ← POST /api/ai → Azure OpenAI token insight
 │
 ├── components/
 │   ├── layout/
-│   │   ├── AppShell.tsx       ← Page wrapper with bottom nav
-│   │   ├── BottomNav.tsx      ← Navigation bar
-│   │   └── PrivyProvider.tsx  ← Auth provider
+│   │   ├── TradingTopNav.tsx     ← Tokens/Portfolio/Leaderboard nav + balance + deposit
+│   │   ├── TradingShell.tsx      ← Top nav wrapper for Portfolio/Leaderboard
+│   │   └── PrivyProvider.tsx     ← Auth provider
 │   ├── charts/
-│   │   └── PriceChart.tsx     ← Candlestick chart (lightweight-charts)
+│   │   └── PriceChart.tsx        ← Candlestick chart (lightweight-charts)
 │   ├── trading/
-│   │   ├── BuySellPanel.tsx   ← Buy/sell UI (Jupiter TODO inside)
-│   │   ├── LiveTrades.tsx     ← Polling live trades feed
-│   │   └── TrendingMini.tsx   ← Mini trending for dashboard
+│   │   ├── TokenListColumn.tsx   ← Persistent left token list (Trending/New/Gainers)
+│   │   └── TradePanel.tsx        ← Real Jupiter swap (quote → sign → send → record)
 │   └── wallet/
-│       ├── NetWorthCard.tsx   ← Portfolio value + sparkline
-│       └── ActivityFeed.tsx   ← Recent trades list
+│       └── DepositModal.tsx      ← Real QR code + wallet address
 │
 ├── lib/
-│   ├── birdeye.ts             ← BirdEye API client (server only)
-│   ├── alchemy.ts             ← Solana RPC via Alchemy
-│   ├── supabase.ts            ← Supabase client + DB types
-│   └── utils.ts               ← formatUSD, formatPct, etc.
+│   ├── birdeye.ts                ← BirdEye API client (server only)
+│   ├── alchemy.ts                ← Solana RPC via Alchemy
+│   ├── jupiter.ts                ← Jupiter swap quote/transaction client
+│   ├── supabase.ts                ← Supabase client + DB types + getOrCreateUser
+│   └── utils.ts                  ← formatUSD, formatPct, colorForSymbol, etc.
 │
-├── .env.local                 ← Your secrets (never commit this)
-└── .env.example               ← Template to share
+├── .env.local                    ← Your secrets (never commit this)
+└── .env.example                  ← Template to share
 ```
 
 ---
 
-## What's wired up vs. TODO
+## What's wired up
 
-### ✅ Done
-- Google/Apple login via Privy
+- Google/Apple/email login via Privy (Google/Apple require enabling in the Privy dashboard)
 - Auto-created Solana embedded wallet per user
-- Trending tokens page (real BirdEye data)
-- Token detail page: price, stats, chart
-- Candlestick chart (lightweight-charts)
-- Live trades feed (polls every 5s)
-- AI token summary (Claude API)
-- Profile page with wallet address + deposit info
-- Bottom nav, dark theme, mobile layout
-
-### 🔧 TODO (wire up yourself)
-- **Real net worth**: use `getTokenAccounts()` + `getMultipleTokenPrices()` (see comments in `NetWorthCard.tsx`)
-- **Real activity feed**: query Supabase `trades` table (see comments in `ActivityFeed.tsx`)
-- **Buy/sell swap**: integrate Jupiter API (see `BuySellPanel.tsx` — the exact steps are commented inside)
-- **TradingView Charting Library**: replace `PriceChart.tsx` with official TV widget for advanced features
-- **Save user to Supabase**: after Privy login, upsert into `users` table
-
----
+- Trending/new-listing tokens, real-time price chart, live trades, holders/liquidity — all real BirdEye data
+- Real swaps via Jupiter (quote → build tx → sign with embedded wallet → send → confirm → record)
+- Real net worth (Alchemy balances × BirdEye prices) and holdings allocation
+- Real activity feed and trade history (Supabase)
+- Real deposit flow (QR code + address)
+- Per-token trader leaderboard (real BirdEye PnL/volume/tags) — note this is "top traders of token X," not a global cross-token leaderboard, since no real data source for that exists on the free API tier
+- AI token insight via Azure OpenAI
 
 ## Key Docs
 
 - [Privy React Quickstart](https://docs.privy.io/guide/react/quickstart)
 - [BirdEye API Reference](https://birdeye.so/data-api)
 - [Alchemy Solana RPC](https://docs.alchemy.com/reference/solana-api)
-- [Jupiter Swap API](https://station.jup.ag/docs/apis/swap-api)
-- [TradingView Charting Library](https://www.tradingview.com/charting-library-docs/latest/api/)
+- [Jupiter Swap API](https://dev.jup.ag/docs/swap-api/)
 - [Supabase JS Client](https://supabase.com/docs/reference/javascript)
