@@ -14,6 +14,9 @@ import { formatUSD, formatPct, formatLargeNumber, shortenAddress } from "@/lib/u
 import type { TokenOverview, OHLCVBar, Trade } from "@/lib/birdeye";
 
 const TIMEFRAMES = ["1m", "5m", "1H", "4H", "1D"];
+// Some tokens (low liquidity, very new) don't have candle history at finer
+// resolutions — try progressively coarser timeframes until one actually has data.
+const FALLBACK_ORDER = ["1m", "5m", "1H", "4H", "1D"];
 
 function timeAgo(blockTimeSec: number) {
   const diff = Math.max(0, Math.floor(Date.now() / 1000) - blockTimeSec);
@@ -45,12 +48,32 @@ export default function TokenTradingPage() {
       .catch(() => setLoading(false));
   };
 
-  // Reset to the default 1m timeframe whenever a different token is selected
+  // Reset to the default timeframe whenever a different token is selected
   // (this page component is reused across navigations, so state would
-  // otherwise carry over the previous token's chosen timeframe).
+  // otherwise carry over the previous token's chosen timeframe). Try 1m first,
+  // then progressively coarser resolutions until one actually has candle data.
   useEffect(() => {
-    setResolution("1m");
-    fetchData("1m");
+    let cancelled = false;
+    setLoading(true);
+
+    (async () => {
+      for (const tf of FALLBACK_ORDER) {
+        const res = await fetch(`/api/token?address=${address}&resolution=${tf}`);
+        const d = await res.json();
+        if (cancelled) return;
+
+        if (d.ohlcv?.length > 0 || tf === FALLBACK_ORDER[FALLBACK_ORDER.length - 1]) {
+          setOverview(d.overview);
+          setOhlcv(d.ohlcv ?? []);
+          setTrades(d.trades ?? []);
+          setResolution(tf);
+          setLoading(false);
+          return;
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [address]);
 
   useEffect(() => {

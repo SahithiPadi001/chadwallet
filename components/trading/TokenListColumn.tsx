@@ -47,6 +47,15 @@ export function TokenListColumn({ search }: Props) {
         }
         setTokens(list);
         setLoading(false);
+
+        // Landing on the bare /tokens route (no address yet) — jump straight to
+        // whatever this same list considers #1, so the selected token always
+        // matches what's actually shown at the top of the list. Doing this here
+        // (instead of a separate server-side redirect with its own fetch) avoids
+        // the two disagreeing when BirdEye's trending order shifts between calls.
+        if (!activeAddress && filter === "Trending" && list[0]?.address) {
+          router.replace(`/tokens/${list[0].address}`);
+        }
       })
       .catch(() => setLoading(false));
   }, [filter]);
